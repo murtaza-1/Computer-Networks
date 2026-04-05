@@ -1,0 +1,103 @@
+import random
+
+class DNSMessage:
+    def __init__(self, msg_id, is_response, query):
+        self.id = msg_id
+        self.is_response = is_response
+        self.query = query
+        self.answer = None
+
+
+dns_records = {
+    "google.com": {
+        "A": ["64.233.167.99", "72.14.207.99", "64.233.187.99"],
+        "NS": ["ns1.google.com", "ns2.google.com", "ns3.google.com", "ns4.google.com"],
+        "MX": ["smtp1.google.com", "smtp2.google.com", "smtp3.google.com", "smtp4.google.com"]
+    },
+    "facebook.com": {
+        "A": ["157.240.22.35"],
+        "NS": ["ns1.facebook.com", "ns2.facebook.com"],
+        "MX": ["smtp.facebook.com"]
+    }
+}
+
+
+cache = {}
+MAX_CACHE = 3
+
+
+def add_to_cache(domain, data):
+    if len(cache) >= MAX_CACHE:
+        first_key = list(cache.keys())[0]
+        print(f"Cache Full Removing: {first_key}")
+        del cache[first_key]
+    cache[domain] = data
+
+
+def root_server(message):
+    print("Root Server Received query for:", message.query)
+    if message.query.endswith(".com"):
+        return DNSMessage(message.id, True, "com_server")
+    return None
+
+
+def tld_server(message):
+    print("TLD Server Handling:", message.query)
+    if message.query in dns_records:
+        return DNSMessage(message.id, True, "authoritative_server")
+    return None
+
+
+def authoritative_server(message):
+    print("Authoritative Server Resolving:", message.query)
+    record = dns_records.get(message.query, None)
+    response = DNSMessage(message.id, True, message.query)
+    response.answer = record
+    return response
+
+
+def dns_lookup(domain):
+    print("\nDNS LOOKUP")
+
+    if domain in cache:
+        print("Client Cache Hit!")
+        return cache[domain]
+
+    print("Client Cache Miss ---Starting Resolution")
+
+    msg_id = random.randint(1000, 9999)
+    query_msg = DNSMessage(msg_id, False, domain)
+
+    root_server(query_msg)
+    tld_server(query_msg)
+    final_response = authoritative_server(query_msg)
+
+    if final_response.answer:
+        add_to_cache(domain, final_response.answer)
+
+    return final_response.answer
+
+
+def display_result(domain, result):
+    if not result:
+        print("Domain not found.")
+        return
+
+    print(f"\n{domain}/{result['A'][0]}")
+    print("\n-- DNS INFORMATION --")
+    print("A:", ", ".join(result["A"]))
+    print("NS:", ", ".join(result["NS"]))
+    print("MX:", ", ".join(result["MX"]))
+
+
+if __name__ == "__main__":
+    while True:
+        domain = input("\nEnter domain or 'exit': ")
+
+        if domain == "exit":
+            break
+
+        result = dns_lookup(domain)
+        display_result(domain, result)
+
+        print("\nCache:", cache)
